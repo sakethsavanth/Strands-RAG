@@ -14,3 +14,25 @@
 2025-12-29 11:20:40.324069 | MCP server started
 2025-12-29 11:23:30.994922 | MCP server started
 2025-12-29 11:23:32.043799 | MCP server started
+2025-12-29 19:25:14.038318 | MCP server started
+2025-12-29 19:31:59.259986 | MCP server started
+2025-12-29 19:32:10.128659 | MCP tool called with topic: Introduction
+2025-12-29 19:32:10.145689 | MCP response: No external regulatory information found.
+2025-12-29 20:09:41.598322 | MCP server started
+2025-12-29 20:10:29.912625 | MCP server started
+2025-12-29 20:10:40.788031 | MCP tool called with topic: BCBS focus
+2025-12-29 20:10:40.809234 | MCP response: BCBS 239 refers to Basel Committee principles for risk data aggregation and risk reporting. It focuses on accuracy, completeness, timeliness, and governance of risk data in banks.
+2025-12-29 20:17:51.082368 | MCP server started
+2025-12-29 20:20:00.641310 | MCP server started
+2025-12-29 20:30:06.021911 | MCP server started
+2025-12-29 20:30:50.752927 | MCP tool called with topic: risk reporting practices
+2025-12-29 20:30:50.769107 | MCP response: No external regulatory information found.
+2025-12-29 20:49:27.569768 | MCP SERVER STARTED
+2025-12-29 20:51:17.665498 | MCP SERVER STARTED
+2025-12-29 20:52:10.355639 | MCP SERVER STARTED
+2025-12-29 20:53:32.186000 | MCP SERVER STARTED
+2025-12-29 20:54:45.902353 | MCP SERVER STARTED
+2025-12-29 20:55:32.964420 | MCP SERVER STARTED
+2025-12-29 20:58:20.878075 | MCP SERVER STARTED
+2025-12-29 21:00:13.461210 | MCP SERVER STARTED
+2025-12-29 21:02:02.186624 | MCP SERVER STARTED

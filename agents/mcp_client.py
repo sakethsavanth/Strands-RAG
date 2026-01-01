@@ -1,15 +1,8 @@
-from strands.tools.mcp import MCPClient
-import sys
-import os
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
-from mcp import StdioServerParameters, stdio_client
+import requests
 
-regulatory_mcp = MCPClient(
-    lambda: stdio_client(
-        StdioServerParameters(
-            command="python",
-            args=["mcp_server/server.py"]
-        )
-    )
-)
+MCP_BASE = "http://localhost:3333"
+
+def mcp_post(endpoint: str, payload: dict):
+    r = requests.post(f"{MCP_BASE}{endpoint}", json=payload, timeout=5)
+    r.raise_for_status()
+    return r.json()

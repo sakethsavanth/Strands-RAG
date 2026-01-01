@@ -1,43 +1,58 @@
 import os
 import pickle
-import sys
 import time
+from pypdf import PdfReader
+import sys
+import os
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
-from pypdf import PdfReader
+
 from rag.embeddings import TitanEmbeddingModel
 from rag.vector_store import FaissVectorStore
-
-# ✅ Add project root to PYTHONPATH
-
 
 DATA_DIR = "data"
 INDEX_DIM = 1024
 BATCH_SIZE = 20  # Safe for Bedrock
 
-def ingest():
-    embedder = TitanEmbeddingModel(region="us-west-2")
+
+def ingest_files(status_callback=None):
+    """
+    Ingest all PDFs from data/ directory.
+    Can be called from Streamlit or CLI.
+    """
+
+    def status(msg):
+        if status_callback:
+            status_callback(msg)
+        else:
+            print(msg)
+
+    embedder = TitanEmbeddingModel()
     store = FaissVectorStore(dim=INDEX_DIM)
 
     texts = []
     metadatas = []
 
-    print("📄 Reading PDFs...")
+    status("📄 Scanning data folder for PDFs...")
 
-    for file in os.listdir(DATA_DIR):
-        if not file.lower().endswith(".pdf"):
-            continue
+    pdfs = [f for f in os.listdir(DATA_DIR) if f.lower().endswith(".pdf")]
+    if not pdfs:
+        status("⚠️ No PDFs found in data folder.")
+        return
 
-        print(f"  → Processing {file}")
+    for file in pdfs:
+        status(f"📘 Reading {file}")
         path = os.path.join(DATA_DIR, file)
-        reader = PdfReader(path)
 
+        reader = PdfReader(path)
         full_text = ""
+
         for page in reader.pages:
             full_text += page.extract_text() or ""
 
+        # --- Chunking ---
         chunks = [
-            full_text[i:i+500]
+            full_text[i:i + 500]
             for i in range(0, len(full_text), 450)
         ]
 
@@ -49,38 +64,35 @@ def ingest():
             })
 
     total = len(texts)
-    print(f"\n🧠 Total chunks to embed: {total}")
-    print("🚀 Starting Titan embedding...\n")
+    status(f"✂️ Created {total} chunks")
 
+    # --- Embedding ---
+    status("🧠 Starting Titan embeddings...")
     vectors = []
 
     start_time = time.time()
 
     for i in range(0, total, BATCH_SIZE):
-        batch = texts[i:i+BATCH_SIZE]
-
+        batch = texts[i:i + BATCH_SIZE]
         batch_vectors = embedder.embed(batch)
         vectors.extend(batch_vectors)
 
         completed = min(i + BATCH_SIZE, total)
         elapsed = time.time() - start_time
-        rate = completed / elapsed if elapsed > 0 else 0
-        remaining = (total - completed) / rate if rate > 0 else 0
 
-        print(
+        status(
             f"✔ Embedded {completed}/{total} chunks "
-            f"({completed/total:.1%}) | "
-            f"Elapsed: {elapsed:.1f}s | "
-            f"ETA: {remaining/60:.1f} min"
+            f"({completed / total:.1%})"
         )
 
+    # --- FAISS Index ---
+    status("📦 Updating FAISS index...")
     store.add(vectors, metadatas)
     store.save()
 
-    print("\n✅ Titan ingestion complete")
-    print("📁 Files created:")
-    print(" - rag/index.faiss")
-    print(" - rag/meta.pkl")
+    status("✅ Ingestion complete. Documents ready for querying.")
 
+
+# CLI support (unchanged behavior)
 if __name__ == "__main__":
-    ingest()
+    ingest_files()

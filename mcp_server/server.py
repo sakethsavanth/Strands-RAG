@@ -1,57 +1,119 @@
-from fastmcp import FastMCP
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List, Dict
 import datetime
 
-mcp = FastMCP("Regulatory Knowledge MCP")
+app = FastAPI(title="Advanced RAG Control Plane (FastMCP)")
 
-LOG_FILE = "mcp_server/mcp.log"
+# -------------------------------------------------
+# Models
+# -------------------------------------------------
+class QueryRequest(BaseModel):
+    query: str
 
-def log(msg):
-    with open(LOG_FILE, "a") as f:
-        f.write(f"{datetime.datetime.now()} | {msg}\n")
+class NegotiationRequest(BaseModel):
+    agent_proposal: str
+    strict_grounding: bool
 
-@mcp.tool()
-def regulatory_lookup(topic: str) -> str:
-    log(f"MCP tool called with topic: {topic}")
+class ValidationRequest(BaseModel):
+    answer: str
+    strict_grounding: bool
 
-    topic_lower = topic.lower()
+# -------------------------------------------------
+# 1️⃣ QUERY CLASSIFIER & ROUTER
+# -------------------------------------------------
+@app.post("/classify")
+def classify_query(req: QueryRequest):
+    q = req.query.lower()
 
-    if "bcbs" in topic_lower or "239" in topic_lower:
-        response = (
-            "BCBS 239 refers to Basel Committee principles for "
-            "risk data aggregation and risk reporting. "
-            "It focuses on accuracy, completeness, timeliness, "
-            "and governance of risk data in banks."
-        )
+    if any(k in q for k in ["bcbs", "basel", "regulation", "compliance"]):
+        return {
+            "query_type": "regulatory",
+            "strict_grounding": True,
+            "allowed_agents": ["generation"]
+        }
 
-    elif "data aggregation" in topic_lower:
-        response = (
-            "Risk data aggregation refers to the ability of banks "
-            "to collect, process, and aggregate risk data accurately "
-            "and efficiently across business lines."
-        )
+    if any(k in q for k in ["explain", "what is", "describe"]):
+        return {
+            "query_type": "document_grounded",
+            "strict_grounding": False,
+            "allowed_agents": ["retrieval", "generation"]
+        }
 
-    elif "explainability" in topic_lower:
-        response = (
-            "Model explainability refers to the ability to understand "
-            "and interpret how a model produces its outputs, which is "
-            "critical for trust, governance, and regulatory compliance."
-        )
+    return {
+        "query_type": "general",
+        "strict_grounding": False,
+        "allowed_agents": ["generation"]
+    }
 
-    # ✅ ADD YOUR BLOCK RIGHT HERE
-    elif "project" in topic_lower:
-        response = (
-            "This project demonstrates an advanced Agentic RAG system "
-            "built using Strands SDK, Amazon Titan embeddings for retrieval, "
-            "Amazon Nova for generation, and MCP for secure external tool access."
-        )
+# -------------------------------------------------
+# 2️⃣ RETRIEVAL STRATEGY CONTROLLER
+# -------------------------------------------------
+@app.post("/retrieval_strategy")
+def retrieval_strategy(classification: Dict):
+    if classification["query_type"] == "regulatory":
+        return {
+            "top_k": 0,
+            "chunking": [],
+            "rerank": False
+        }
 
-    else:
-        response = "No external regulatory information found."
+    if classification["query_type"] == "document_grounded":
+        return {
+            "top_k": 6,
+            "chunking": ["semantic", "paragraph", "hierarchical"],
+            "rerank": True
+        }
 
-    log(f"MCP response: {response}")
-    return response
+    return {
+        "top_k": 3,
+        "chunking": ["semantic"],
+        "rerank": False
+    }
 
-if __name__ == "__main__":
-    log("MCP server started")
-    mcp.run()
-    log("MCP server stopped")
+# -------------------------------------------------
+# 3️⃣ AGENT ↔ MCP NEGOTIATION
+# -------------------------------------------------
+@app.post("/negotiate")
+def negotiate(req: NegotiationRequest):
+    if req.strict_grounding:
+        return {
+            "approved": True,
+            "instruction": "Answer ONLY from provided documents. Say 'I don't know' if unsure."
+        }
+
+    return {
+        "approved": True,
+        "instruction": "You may answer freely but prefer document grounding."
+    }
+
+# -------------------------------------------------
+# 4️⃣ ANSWER VALIDATOR / POLICY CHECKER
+# -------------------------------------------------
+@app.post("/validate")
+def validate_answer(req: ValidationRequest):
+    if req.strict_grounding and "I don't know" not in req.answer and len(req.answer) < 40:
+        return {
+            "approved": False,
+            "reason": "Answer too weak for regulatory question"
+        }
+
+    return {
+        "approved": True,
+        "reason": "Answer approved"
+    }
+
+# -------------------------------------------------
+# 5️⃣ SYSTEM NARRATOR (FOR UI)
+# -------------------------------------------------
+@app.post("/narrate")
+def narrate_system(data: Dict):
+    return {
+        "narration": (
+            f"Query classified as '{data['classification']['query_type']}'. "
+            f"Retrieval used top_k={data['strategy']['top_k']}. "
+            f"Strict grounding={data['classification']['strict_grounding']}. "
+            f"Validation result={data['validation']['reason']}."
+        ),
+        "timestamp": str(datetime.datetime.now())
+    }

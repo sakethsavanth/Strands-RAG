@@ -3,7 +3,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import os
 import pickle
-
+# ⚠️ Deprecated: Not used by current Titan-based RAG pipeline
 DATA_DIR = "data"
 INDEX_FILE = "rag/index.faiss"
 STORE_FILE = "rag/store.pkl"

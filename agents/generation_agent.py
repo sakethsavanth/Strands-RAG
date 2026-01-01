@@ -1,49 +1,48 @@
 from strands import Agent
 from strands.models.bedrock import BedrockModel
-import sys
-import os
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
-from agents.mcp_client import regulatory_mcp
-# agents/generation_agent.py
 
-LAST_MCP_CONTEXT = None
-
-nova = BedrockModel(
+# ---------------- MODEL ----------------
+model = BedrockModel(
     model_id="us.amazon.nova-pro-v1:0",
     temperature=0.2,
     max_tokens=1200
 )
 
-generation_agent = Agent(
-    model=nova,
-    tools=[regulatory_mcp],
+# ---------------- AGENT ----------------
+agent = Agent(
+    model=model,
     system_prompt="""
-You are a grounded RAG assistant.
-Answer ONLY using the provided context.
-If the answer is not in the context, say "I don't know".
+You are an intelligent assistant in an Agentic RAG system.
+
+Rules:
+- Follow MCP instructions strictly.
+- Use document context when provided.
+- NEVER hallucinate.
+- If context is insufficient, say "I don't know".
 """
 )
 
-def generate_answer(query: str, context_chunks: list):
-    global LAST_MCP_CONTEXT
-    LAST_MCP_CONTEXT = None  # reset per query
+# ---------------- GENERATION ----------------
+def generate_answer(query: str, chunks: list, instruction: str) -> str:
+    """
+    Generates the final answer.
+    MCP is NOT called here.
+    MCP instructions are passed in as text.
+    """
+
+    context = "\n\n".join(c["text"] for c in chunks)
 
     prompt = f"""
-        Answer the question using the provided context.
+Instruction from MCP:
+{instruction}
 
-        Context:
-        {[c["text"] for c in context_chunks]}
+Context:
+{context}
 
-        Question:
-        {query}
-        """
+Question:
+{query}
+"""
 
-    response = generation_agent(prompt)
-
-    # 🔑 Capture MCP context if present
-    for msg in response.message.get("content", []):
-        if msg.get("type") == "tool_result":
-            LAST_MCP_CONTEXT = msg["content"]
+    response = agent(prompt)
 
     return response.message["content"][0]["text"]
