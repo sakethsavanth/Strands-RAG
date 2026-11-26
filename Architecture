@@ -1,0 +1,167 @@
+
+@startuml Collections_AI_Solution_Architecture
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v23.1/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/Groups/all.puml
+!include AWSPuml/NetworkingContentDelivery/APIGateway.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingNetworkLoadBalancer.puml
+!include AWSPuml/Containers/Fargate.puml
+!include AWSPuml/Compute/Lambda.puml
+!include AWSPuml/ArtificialIntelligence/Bedrock.puml
+!include AWSPuml/ArtificialIntelligence/BedrockAgentCore.puml
+!include AWSPuml/ApplicationIntegration/EventBridge.puml
+!include AWSPuml/ApplicationIntegration/SimpleQueueService.puml
+!include AWSPuml/Storage/SimpleStorageService.puml
+!include AWSPuml/Database/DynamoDB.puml
+!include AWSPuml/SecurityIdentityCompliance/IdentityandAccessManagement.puml
+!include AWSPuml/SecurityIdentityCompliance/KeyManagementService.puml
+!include AWSPuml/SecurityIdentityCompliance/SecretsManager.puml
+!include AWSPuml/ManagementGovernance/CloudWatch.puml
+!include AWSPuml/General/Users.puml
+!include AWSPuml/General/GenericDatabase.puml
+
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 50
+skinparam backgroundColor #FFFFFF
+
+title Collections AI - Proposed Solution Architecture
+
+' External Entities
+Users(Users, "Collections Users / Agents", "Web Browser")
+GenericDatabase(IDPData, "IDP Data", "External Data Source [Data Stack 2]")
+
+' AWS Cloud Boundary
+AWSCloudGroup(AWSCloud, "AWS Cloud - Collections AI") {
+
+  ' Shared Platform, Security & Observability (Cross-Cutting)
+  package "Security, Governance & Monitoring [IAM & Monitoring Stacks]" as SharedGov #F8F9FA {
+    IdentityandAccessManagement(IAM, "IAM Roles & Policies", "Imported L2")
+    KeyManagementService(KMS, "AWS KMS", "Encryption Keys")
+    SecretsManager(SecretsMgr, "AWS Secrets Manager", "Credentials & Config")
+    CloudWatch(CloudWatchLogs, "Amazon CloudWatch", "Logs, Metrics & Traces")
+  }
+
+  ' Edge / Ingress Layer
+  APIGateway(APIGW, "Amazon API Gateway", "REST API Entrypoint")
+
+  ' VPC Boundary
+  VPCGroup(VPC, "Collections AI VPC [Network Stack]") {
+    note right of VPC
+      **Network Controls:**
+      Security Groups & NACLs
+      Private & Public Subnets
+    end note
+
+    ' Presentation / Frontend Subnet
+    PublicSubnetGroup(FrontendSubnet, "Frontend Tier Subnet") {
+      ElasticLoadBalancingApplicationLoadBalancer(ALB_FE, "Frontend ALB", "Application Load Balancer")
+      Fargate(AngularUI, "Angular UI Service", "ECS Fargate [Frontend Stack]")
+    }
+
+    ' Application / Backend Subnet
+    PrivateSubnetGroup(AppSubnet, "Backend Tier Subnet") {
+      ElasticLoadBalancingApplicationLoadBalancer(ALB_BE, "Backend ALB", "Internal Routing")
+      ElasticLoadBalancingNetworkLoadBalancer(NLB_BE, "Backend NLB", "TCP / Internal Load Balancing")
+      Fargate(FastAPI, "Python FastAPI", "ECS Fargate [Backend Stack]")
+      Fargate(SpringBoot, "Java Spring Boot", "ECS Fargate [Backend Stack]")
+    }
+
+    ' Messaging & Event Bus
+    package "Backend Connectivity & Async Messaging" as Messaging #FFF0F5 {
+      EventBridge(EventBus, "Amazon EventBridge", "Event Routing")
+      SimpleQueueService(SQSQueue, "Amazon SQS", "Async Task Queues")
+    }
+
+    ' Agentic Runtime & Tool Lambdas Subnet
+    PrivateSubnetGroup(AgentComputeSubnet, "Agent Runtime & Tool Lambdas Subnet") {
+      
+      ' AgentCore Hub (Inspired by ITOps Pattern)
+      package "Amazon Bedrock AgentCore Hub [AI Stack]" as AgentCoreHub #E6F7F4 {
+        BedrockAgentCore(AgentCoreRuntime, "AgentCore Runtime", "Agent Orchestration & Execution")
+        BedrockAgentCore(AgentCoreGateway, "AgentCore Gateway", "Tool & Action Routing")
+        BedrockAgentCore(AgentCoreMemory, "AgentCore Memory", "Session & Context Store")
+        BedrockAgentCore(AgentCoreIdentity, "AgentCore Identity", "User & Tool Auth")
+        BedrockAgentCore(AgentCoreObs, "AgentCore Observability", "Agent Traces & Telemetry")
+      }
+
+      ' Specialized Lambda Functions
+      package "Agent & Pipeline Lambdas [Lambda Stack]" as LambdaStack #FFF8EE {
+        Lambda(KnowledgeLambda, "Knowledge Agent Lambda", "RAG & KB Retrieval")
+        Lambda(AnalystLambda, "Analyst Agent Lambda", "Collections Analytics")
+        Lambda(RRLambda, "RR Agent Lambda", "Resolution / Recovery Agent")
+        Lambda(KaParityLambda, "Ka-parity-test", "Parity Validation Lambda")
+        Lambda(MasterPromptLambda, "Master-prompt-pipeline", "Prompt Orchestration")
+      }
+    }
+
+    ' Managed AI & Data Persistence Layer
+    package "Bedrock Foundation Models & Knowledge Base [AI Stack]" as BedrockServices #E6F7F4 {
+      Bedrock(BedrockClassic, "Amazon Bedrock (Classic)", "Foundation Models / LLMs")
+      Bedrock(BedrockKB, "Bedrock Knowledge Base", "Managed RAG Engine")
+    }
+
+    package "Data Persistence Layer [Data Stack]" as DataStack #F0F8EE {
+      SimpleStorageService(S3Bucket, "Amazon S3 Bucket", "Documents & Artifacts")
+      SimpleStorageService(S3Vectors, "Amazon S3 Vectors", "Vector Embeddings Store")
+      DynamoDB(DynamoTable, "Amazon DynamoDB", "Collections State & Metadata")
+    }
+  }
+}
+
+' ==================== CONNECTIONS & DATA FLOW ====================
+
+' 1. User Ingress & Frontend Flow
+Users --> ALB_FE : HTTPS
+ALB_FE --> AngularUI : Serves SPA
+AngularUI --> APIGW : REST API Calls
+
+' 2. Backend Services & Connectivity
+APIGW --> ALB_BE : Routes Requests
+APIGW --> NLB_BE : Internal TCP/Service Traffic
+ALB_BE --> FastAPI
+ALB_BE --> SpringBoot
+NLB_BE --> SpringBoot
+FastAPI <--> SpringBoot : Internal Service Calls
+
+' 3. Async Eventing
+SpringBoot --> EventBus : Domain Events
+FastAPI --> SQSQueue : Async Jobs
+EventBus --> SQSQueue : Event Rules
+SQSQueue --> MasterPromptLambda : Triggers Pipeline
+
+' 4. AgentCore Orchestration (ITOps Reference Pattern)
+FastAPI --> AgentCoreRuntime : Invokes Collections Agents
+AgentCoreRuntime <--> AgentCoreMemory : Session & History
+AgentCoreRuntime --> AgentCoreIdentity : Authenticate User & Tools
+AgentCoreRuntime --> AgentCoreObs : Send Traces
+AgentCoreRuntime --> BedrockClassic : Invoke Foundation Models
+AgentCoreRuntime --> AgentCoreGateway : Dispatch Tool Requests
+
+' 5. AgentCore Gateway to Specialized Lambdas
+AgentCoreGateway --> KnowledgeLambda : Tool Call
+AgentCoreGateway --> AnalystLambda : Tool Call
+AgentCoreGateway --> RRLambda : Tool Call
+AgentCoreGateway --> KaParityLambda : Validation Call
+MasterPromptLambda --> AgentCoreRuntime : Prompt Config / Execution
+
+' 6. Knowledge Base & Data Layer
+KnowledgeLambda --> BedrockKB : Retrieve Knowledge
+BedrockKB --> S3Vectors : Vector Similarity Search
+BedrockKB --> S3Bucket : Source Documents
+AnalystLambda --> DynamoTable : Read/Write Account Data
+RRLambda --> DynamoTable : Update Collections State
+SpringBoot --> DynamoTable : Core Transactional Data
+IDPData --> S3Bucket : External Data Ingestion
+
+' 7. Governance, Security & Monitoring
+AgentCoreObs --> CloudWatchLogs : Streams Agent Telemetry
+LambdaStack ..> CloudWatchLogs : Execution Logs
+AppSubnet ..> CloudWatchLogs : Container Logs
+AgentCoreIdentity ..> IAM : Role Assumption
+AgentCoreIdentity ..> SecretsMgr : API / Tool Secrets
+DataStack ..> KMS : Encryption at Rest
+
+@enduml
